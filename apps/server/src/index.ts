@@ -1,8 +1,10 @@
+import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
+import aiRouter from "./routes/ai";
 
-dotenv.config();
+console.log("Loaded key:", process.env.OPENAI_API_KEY ? "✅ Present" : "❌ Missing");
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -20,3 +22,5 @@ app.get("/health", (req, res) => {
 app.listen(port, () => {
   console.log(`🚀 Server running on http://localhost:${port}`);
 });
+
+app.use("/api", aiRouter);
