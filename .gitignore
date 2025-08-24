@@ -10,7 +10,20 @@ apps/*/build/
 
 # env files
 .env
+apps/*/.env# dependencies
+node_modules/
+apps/*/node_modules/
+
+# build outputs
+dist/
+build/
+apps/*/dist/
+apps/*/build/
+
+# env files
+.env
 apps/*/.env
+
 
 # misc
 .DS_Store
