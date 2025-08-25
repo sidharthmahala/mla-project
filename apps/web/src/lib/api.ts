@@ -16,6 +16,7 @@ export type Course = {
 
 
 
+
 export type SuggestResponse = {
   titles: string[];
 };

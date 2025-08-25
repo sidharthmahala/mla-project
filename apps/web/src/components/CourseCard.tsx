@@ -1,6 +1,6 @@
 // src/components/CourseCard.tsx
 import { useState } from "react";
-import { BookOpen, Clock } from "lucide-react";
+import { BookOpen, Clock, DollarSign } from "lucide-react";
 import TitleModal from "./TitleModal";
 
 type Course = {
@@ -12,6 +12,7 @@ type Course = {
   duration?: string | null;
   level?: "Beginner" | "Intermediate" | "Advanced" | null;
   hosting?: boolean | null;
+  price?: string | null;
 };
 
 type Props = {
@@ -22,8 +23,12 @@ export default function CourseCard({ course }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [chosenTitle, setChosenTitle] = useState<string | null>(null);
 
+  const isFree = !course.price || course.price === "0";
+  const numericPrice = Number(course.price) || null;
+  const displayPrice = isFree ? "Free" : `${course.price}`;
+
   return (
-    <article
+    <div
       className="relative rounded-2xl overflow-hidden border-4 border-white
                  shadow-md transition hover:shadow-lg group"
     >
@@ -35,7 +40,18 @@ export default function CourseCard({ course }: Props) {
           className="w-full aspect-[210/297] object-cover"
         />
       )}
-
+      <div
+        className={`absolute top-3 left-3 flex items-center gap-1 px-2 py-1 
+                    text-xs font-medium rounded-md shadow
+                    ${
+                      isFree
+                        ? "bg-green-100 text-green-700"
+                        : "bg-white/80 text-gray-900"
+                    }`}
+      >
+        {!isFree && numericPrice !== null && <DollarSign className="w-3 h-3" />}
+        {displayPrice}
+      </div>
       {/* Overlay content */}
       <div className="absolute bottom-0 w-full z-20">
         {/* Chapters badge */}
@@ -50,7 +66,7 @@ export default function CourseCard({ course }: Props) {
         )}
 
         <div
-          className="p-4 rounded-t-xl bg-white/50 backdrop-blur-sm
+          className="p-4 rounded-t-xl bg-white/50 backdrop-blur-md
                      transition-colors duration-700 ease-in-out group-hover:bg-white"
         >
           <header>
@@ -108,6 +124,6 @@ export default function CourseCard({ course }: Props) {
           setModalOpen(false);
         }}
       />
-    </article>
+    </div>
   );
 }
