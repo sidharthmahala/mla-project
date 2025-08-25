@@ -3,9 +3,18 @@ import axios from "axios";
 export type Course = {
   id: number;
   title: string;
+  selectedTitle: string | null;
   contentPath: string | null;
   coverUrl: string | null;
+  description: string;
+  price: string;
+  chapters: number;
+  duration: string;
+  level: "Beginner" | "Intermediate" | "Advanced";
+  hosting: boolean;
 };
+
+
 
 export type SuggestResponse = {
   titles: string[];
@@ -22,7 +31,6 @@ export type AnalyzeResponse = {
   };
 };
 
-/* ===== Axios client ===== */
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "http://localhost:4000/api",
 });

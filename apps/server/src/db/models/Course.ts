@@ -2,7 +2,7 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../sequelize";
 
-// --- Define the attributes of the Course table ---
+// --- Define the attributes
 interface CourseAttributes {
   id: number;
   title: string;
@@ -10,7 +10,7 @@ interface CourseAttributes {
   contentPath: string | null;
   coverUrl: string | null;
   description: string;
-  price: string; // keep as string for now
+  price: string;
   chapters: number;
   duration: string;
   level: "Beginner" | "Intermediate" | "Advanced";

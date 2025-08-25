@@ -8,9 +8,7 @@ const router = Router();
  */
 router.get("/", async (_req, res) => {
   try {
-    const courses = await Course.findAll({
-      attributes: ["id", "title", "coverUrl", "description"], // only return what frontend needs
-    });
+    const courses = await Course.findAll();
     res.json(courses);
   } catch (err: any) {
     console.error("❌ Failed to fetch courses:", err);
