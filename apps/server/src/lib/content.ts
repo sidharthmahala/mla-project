@@ -1,34 +1,31 @@
+import fs from "node:fs";
+import path from "node:path";
+import { Course } from "../db/models/Course";
 
-import fs from 'node:fs'
-import path from 'node:path'
-
-export type CourseId = 'fitness' | 'fantasy' | 'caregiver'
-
-const FILE_MAP: Record<CourseId, string> = {
-  fitness: 'Creating Safe Spaces - Implementing Trauma-Informed Practices in Fitness Environments for Intermediate Learners.txt',
-  fantasy: 'Shadows Over Eryndral - A Tangle of Magic and Fate.txt',
-  caregiver: 'How to become a Caregiver.txt'
-}
-
-export function getCourseTitleById(id: CourseId): string {
-  switch (id) {
-    case 'fitness': return 'Creating Safe Spaces - Implementing Trauma-Informed Practices in Fitness Environments for Intermediate Learners'
-    case 'fantasy': return 'Shadows Over Eryndral - A Tangle of Magic and Fate'
-    case 'caregiver': return 'How to become a Caregiver'
+/**
+ * Load the course content from the filesystem,
+ * using the DB `contentPath` field.
+ */
+export async function loadCourseContent(course: Course): Promise<string> {
+  if (!course.contentPath) {
+    console.warn(`⚠ Course ${course.id} has no contentPath`);
+    return ""; // or throw new Error("No content available")
   }
-}
 
-export function loadCourseContent(id: CourseId): string {
-  const fname = FILE_MAP[id]
-  const fpath = path.join(process.cwd(), 'src', 'data', fname)
-  const raw = fs.readFileSync(fpath, 'utf8')
-  return raw
-}
+  const filePath = path.join(process.cwd(), course.contentPath);
+  if (!fs.existsSync(filePath)) {
+    console.warn(`⚠ Missing file at ${filePath}`);
+    return "";
+  }
 
-export function compressContent(htmlLike: string, maxChars = 12000): string {
-  // strip tags and dense whitespace
-  const noTags = htmlLike.replace(/<[^>]+>/g, ' ')
-  const normalized = noTags.replace(/\s+/g, ' ').trim()
-  if (normalized.length <= maxChars) return normalized
-  return normalized.slice(0, maxChars) + '…'
+  return fs.readFileSync(filePath, "utf-8");
+}
+/**
+ * Compress raw text by stripping tags/extra whitespace
+ * and trimming to `maxChars`.
+ */
+export function compressContent(raw: string, maxChars = 12000): string {
+  const noTags = raw.replace(/<[^>]+>/g, " ");
+  const normalized = noTags.replace(/\s+/g, " ").trim();
+  return normalized.length <= maxChars ? normalized : normalized.slice(0, maxChars) + "…";
 }

@@ -1,97 +1,167 @@
+// apps/server/src/routes/ai.ts
 import { Router } from "express";
-import { openai, SUGGESTION_SYS_PROMPT, ANALYZE_SYS_PROMPT } from "../lib/openai";
-import { compressContent, loadCourseContent } from "../lib/content";
-import { SuggestTitlesSchema, AnalyzeTitleSchema } from "../schemas/ai";
-import { formatZodError } from "./../utils/validationError"
+import fs from "fs/promises";
+import { Course } from "../db/models/Course";
+import { z } from "zod";
+import OpenAI from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
 
 const router = Router();
+const client = new OpenAI();
 
+/* ========= SCHEMAS ========= */
+const SuggestionsSchema = z.object({
+  suggestions: z.array(z.string()),
+});
+
+const AnalysisSchema = z.object({
+  pros: z.array(z.string()),
+  cons: z.array(z.string()),
+  scores: z.object({
+    clarity: z.number(),
+    appeal: z.number(),
+    accuracy: z.number(),
+    seo: z.number(),
+  }),
+});
+
+/* ========= /suggest-titles ========= */
 router.post("/suggest-titles", async (req, res) => {
   try {
-    const parsed = SuggestTitlesSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        error: "Invalid request",
-        issues: formatZodError(parsed.error),
-      });
+    const { courseId, temperature } = req.body;
+
+    if (!courseId) {
+      return res.status(400).json({ error: "courseId is required" });
     }
-    const { courseId, temperature } = parsed.data;
 
-    const raw = loadCourseContent(courseId);
-    const content = compressContent(raw);
+    const course = await Course.findByPk(courseId);
+    if (!course) {
+      return res.status(404).json({ error: "Course not found" });
+    }
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: temperature ?? 0.6,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SUGGESTION_SYS_PROMPT },
-        { role: "user", content: `CONTENT:\n${content}` },
-      ],
-    });
+    // Read file content if exists
+let fileContent = "";
+if (course.contentPath) {
+  try {
+    fileContent = await fs.readFile(course.contentPath, "utf-8");
+    // Limit to first 4000 characters to avoid exceeding context window
+    if (fileContent.length > 4000) {
+      fileContent = fileContent.slice(0, 4000) + "\n...[truncated]";
+    }
+  } catch {
+    console.warn(`⚠ Could not read file: ${course.contentPath}`);
+  }
+}
 
-    let payload = completion.choices[0]?.message?.content ?? "{}";
-    let parsedResponse: any;
+
+    // OpenAI call
+    const response = await client.responses.create({
+  model: "gpt-4o-mini",
+  
+  input: [
+    {
+      role: "system",
+      content:
+        "You are a course title generator. Suggest exactly 10 alternative course titles as a JSON array of strings. No explanation, only JSON.",
+    },
+    {
+      role: "user",
+      content: `Current Title: ${course.title}\n\nCourse Description: ${course.description}\n\nSample Content:\n${fileContent}`,
+    },
+  ],
+  temperature: temperature ?? 0.6,
+});
+
+
+    // Try to parse as JSON array
+    let suggestions: string[] = [];
     try {
-      parsedResponse = JSON.parse(payload);
-    } catch {
-      const match = payload.match(/\{[\s\S]*\}/);
-      if (match) parsedResponse = JSON.parse(match[0]);
+      const text = response.output_text?.trim();
+      suggestions = JSON.parse(text);
+    } catch (err) {
+      console.warn("⚠ Failed to parse JSON strictly. Falling back to line split.");
+      const text = response.output_text || "";
+      suggestions = text
+        .split("\n")
+        .map((line) => line.replace(/^[-*]\s*/, "").trim())
+        .filter((line) => line.length > 0)
+        .slice(0, 10);
     }
 
-    if (!parsedResponse || !Array.isArray(parsedResponse.titles)) {
-      throw new Error("Malformed model response");
+    if (suggestions.length === 0) {
+      return res.status(500).json({ error: "No suggestions generated" });
     }
 
-    const unique = Array.from(new Set(parsedResponse.titles.map((t: string) => t.trim()))).slice(0, 10);
-    return res.json({ titles: unique });
+    res.json({ titles: suggestions });
   } catch (err: any) {
-    console.error(err);
-    return res.status(500).json({ error: "Failed to suggest titles", detail: err.message });
+    console.error("❌ Suggest titles failed:", err.message, err.stack);
+    res.status(500).json({ error: err.message || "Internal server error" });
   }
 });
 
+
+/* ========= /analyze-title ========= */
 router.post("/analyze-title", async (req, res) => {
   try {
-    const parsed = AnalyzeTitleSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        error: "Invalid request",
-        issues: formatZodError(parsed.error),
-      });
+    const { courseId, proposedTitle } = req.body;
+
+    if (!courseId || !proposedTitle) {
+      return res
+        .status(400)
+        .json({ error: "courseId and proposedTitle are required" });
     }
-    const { courseId, proposedTitle } = parsed.data;
 
-    const raw = loadCourseContent(courseId);
-    const content = compressContent(raw, 8000);
+    // Fetch course
+    const course = await Course.findByPk(courseId);
+    if (!course) {
+      return res.status(404).json({ error: "Course not found" });
+    }
 
-    const completion = await openai.chat.completions.create({
+    // Read file content if exists
+   
+
+let fileContent = "";
+if (course.contentPath) {
+  try {
+    fileContent = await fs.readFile(course.contentPath, "utf-8");
+    // Limit to first 4000 characters to avoid exceeding context window
+    if (fileContent.length > 4000) {
+      fileContent = fileContent.slice(0, 4000) + "\n...[truncated]";
+    }
+  } catch {
+    console.warn(`⚠ Could not read file: ${course.contentPath}`);
+  }
+}
+
+    // Ask OpenAI to analyze the proposed title
+    const response = await client.responses.parse({
       model: "gpt-4o-mini",
-      temperature: 0.4,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: ANALYZE_SYS_PROMPT },
-        { role: "user", content: `CONTENT:\n${content}\nTITLE:${proposedTitle}` },
+      input: [
+        {
+          role: "system",
+          content:
+            "You are a course title evaluator. Analyze the given proposed title in terms of clarity, appeal, accuracy to course content, and SEO potential.",
+        },
+        {
+          role: "user",
+          content: `Current Title: ${course.title}\n\nCourse Content:\n${fileContent}\n\nProposed Title: ${proposedTitle}\n\nProvide pros, cons, and numeric scores (0–10) for clarity, appeal, accuracy, and seo.`,
+        },
       ],
+      temperature: 0.3,
+      text: {
+        format: zodTextFormat(AnalysisSchema, "title_analysis"),
+      },
     });
 
-    let payload = completion.choices[0]?.message?.content ?? "{}";
-    let parsedResponse: any;
-    try {
-      parsedResponse = JSON.parse(payload);
-    } catch {
-      const match = payload.match(/\{[\s\S]*\}/);
-      if (match) parsedResponse = JSON.parse(match[0]);
+    const parsed = response.output_parsed;
+    if (!parsed) {
+      return res.status(500).json({ error: "Failed to parse AI response" });
     }
 
-    if (!parsedResponse || !parsedResponse.scores) {
-      throw new Error("Malformed model response");
-    }
-
-    return res.json(parsedResponse);
+    res.json(parsed);
   } catch (err: any) {
-    console.error(err);
-    return res.status(500).json({ error: "Failed to analyze title", detail: err.message });
+    console.error("❌ Analyze title failed:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

@@ -1,13 +1,10 @@
-import './App.css'
-
-function App() {
-
+import CourseGrid from "./components/CourseGrid";
+import './index.css'
+export default function App() {
   return (
-    <>
-      <h1 className="text-3xl font-bold underline">Hello Tailwind!</h1>
-
-    </>
-  )
+    <div className="min-h-screen bg-gray-50 p-6">
+      <h1 className="mb-8 text-3xl font-bold">Course Title Generator</h1>
+      <CourseGrid />
+    </div>
+  );
 }
-
-export default App
