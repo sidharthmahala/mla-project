@@ -18,10 +18,10 @@ const AnalysisSchema = z.object({
   pros: z.array(z.string()),
   cons: z.array(z.string()),
   scores: z.object({
-    clarity: z.number(),
-    appeal: z.number(),
-    accuracy: z.number(),
-    seo: z.number(),
+    Clarity: z.number(),
+    Appeal: z.number(),
+    Accuracy: z.number(),
+    SEO: z.number(),
   }),
 });
 
@@ -154,5 +154,81 @@ router.post("/analyze-title", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+// apps/server/src/routes/ai.ts
+
+/* ========= /compare-titles ========= */
+router.post("/compare-titles", async (req, res) => {
+  try {
+    const { courseId, titles } = req.body;
+
+    if (!courseId || !Array.isArray(titles) || titles.length < 2) {
+      return res.status(400).json({ error: "courseId and 2+ titles are required" });
+    }
+
+    const course = await Course.findByPk(courseId);
+    if (!course) return res.status(404).json({ error: "Course not found" });
+
+    // Load content
+    let fileContent = "";
+    if (course.contentPath) {
+      try {
+        fileContent = await fs.readFile(course.contentPath, "utf-8");
+        if (fileContent.length > 4000) fileContent = fileContent.slice(0, 4000) + "\n...[truncated]";
+      } catch {
+        console.warn(`⚠ Could not read file: ${course.contentPath}`);
+      }
+    }
+
+    // Analyze each title in parallel
+    const analyses = await Promise.all(
+      titles.map((proposedTitle) =>
+        client.responses.parse({
+          model: "gpt-4o-mini",
+          input: [
+            {
+              role: "system",
+              content:
+                "You are a course title evaluator. Analyze the given proposed title in terms of clarity, appeal, accuracy to course content, and SEO potential.",
+            },
+            {
+              role: "user",
+              content: `Current Title: ${course.title}\n\nCourse Content:\n${fileContent}\n\nProposed Title: ${proposedTitle}\n\nProvide pros, cons, and numeric scores (0–10) for clarity, appeal, accuracy, and seo.`,
+            },
+          ],
+          temperature: 0.3,
+          text: {
+            format: zodTextFormat(AnalysisSchema, "title_analysis"),
+          },
+        }).then((res) => ({ title: proposedTitle, ...res.output_parsed }))
+      )
+    );
+
+    // Ask GPT for a recommendation
+    const recResponse = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a course marketing expert. Given a list of analyzed titles with scores and pros/cons, recommend the best performing one and briefly explain why.",
+        },
+        {
+          role: "user",
+          content: JSON.stringify(analyses, null, 2),
+        },
+      ],
+      temperature: 0.4,
+    });
+
+    const recommendation = recResponse.choices[0].message.content?.trim() || "";
+
+    res.json({ analyses, recommendation });
+  } catch (err: any) {
+    console.error("❌ Compare titles failed:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 
 export default router;

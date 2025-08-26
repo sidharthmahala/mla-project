@@ -5,6 +5,8 @@ import { Loader2, X, Sparkles, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSuggestTitles, useAnalyzeTitle } from "../hooks/useAI";
 import { useUpdateCourseTitle } from "../hooks/useCourses";
+import { api } from "../lib/api"; // ✅ named import
+import ComparisonModal from "./ComparisonModal";
 
 type Props = {
   open: boolean;
@@ -23,12 +25,19 @@ export default function TitleModal({
 }: Props) {
   const suggest = useSuggestTitles();
   const analyze = useAnalyzeTitle();
+  const updateCourseTitle = useUpdateCourseTitle();
 
   const [temperature, setTemperature] = useState(0.6);
   const [mode, setMode] = useState<Mode>("loading");
   const [titleBatches, setTitleBatches] = useState<string[][]>([]);
   const [batchIndex, setBatchIndex] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
+  // Comparison state
+  const [selectedForCompare, setSelectedForCompare] = useState<string[]>([]);
+  const [compareData, setCompareData] = useState<null | { analyses: any[]; recommendation: string }>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareLoading, setCompareLoading] = useState(false);
 
   // Fetch suggestions on open
   useEffect(() => {
@@ -66,8 +75,6 @@ export default function TitleModal({
     );
   }
 
-  const updateCourseTitle = useUpdateCourseTitle();
-
   function handleUseTitle(title: string) {
     updateCourseTitle.mutate({ courseId, title });
     onUseTitle(title);
@@ -91,10 +98,43 @@ export default function TitleModal({
     );
   }
 
+  function toggleCompareSelection(title: string) {
+    setSelectedForCompare((prev) =>
+      prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]
+    );
+  }
+
+  async function handleCompare() {
+    setCompareLoading(true);
+    setCompareOpen(true); // ✅ open modal immediately
+    try {
+      const res = await api.post("/compare-titles", {
+        courseId,
+        titles: selectedForCompare,
+      });
+      setCompareData(res.data);
+    } finally {
+      setCompareLoading(false);
+    }
+  }
+
+  // Clear compare data on modal close
+  function closeCompare() {
+    setCompareOpen(false);
+    setCompareData(null);
+    setSelectedForCompare([]);
+  }
+
   function TitleRow({ title, index }: { title: string; index: number }) {
     const expanded = selectedIndex === index && mode !== "report";
+    const isSelected = selectedForCompare.includes(title);
+
     return (
-      <div className="rounded-lg border border-gray-50 bg-white p-3 hover:shadow-sm hover:border-gray-200 transition">
+      <div
+        className={`rounded-lg border bg-white p-3 hover:shadow-sm transition ${
+          isSelected ? "border-indigo-400 bg-indigo-50" : "border-gray-100"
+        }`}
+      >
         <button
           onClick={() => setSelectedIndex(expanded ? null : index)}
           className="w-full flex items-center justify-between text-left text-sm"
@@ -115,7 +155,7 @@ export default function TitleModal({
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 <button
                   onClick={() => handleUseTitle(title)}
                   disabled={updateCourseTitle.isPending}
@@ -137,6 +177,16 @@ export default function TitleModal({
                   ) : (
                     "Run Performance Report"
                   )}
+                </button>
+                <button
+                  onClick={() => toggleCompareSelection(title)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                    isSelected
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  {isSelected ? "Remove from Compare" : "Add to Compare"}
                 </button>
               </div>
             </motion.div>
@@ -172,7 +222,7 @@ export default function TitleModal({
             exit={{ opacity: 0, scale: 0.95 }}
             className="fixed inset-0 flex items-center justify-center z-50"
           >
-            <div className="w-[100vw]  md:w-[70vw] md:h-[80vh] bg-white rounded-2xl shadow-2xl p-5 overflow-y-scroll">
+            <div className="w-[100vw] md:w-[70vw] md:h-[80vh] bg-white rounded-2xl shadow-2xl p-5 overflow-y-scroll">
               {/* Header */}
               <div className="flex items-center justify-between mb-2 shrink-0">
                 <div className="flex items-center gap-2">
@@ -189,11 +239,7 @@ export default function TitleModal({
               {/* Body */}
               <div className="flex-1 overflow-y-auto pr-1">
                 <AnimatePresence mode="wait">
-                  {mode === "loading" && (
-                    <motion.div key="loading" animate={{ opacity: 1 }}>
-                      <LoadingView />
-                    </motion.div>
-                  )}
+                  {mode === "loading" && <LoadingView />}
 
                   {mode === "titles" && (
                     <motion.div
@@ -211,18 +257,22 @@ export default function TitleModal({
                       <div className="pt-4 flex flex-col md:flex-row justify-center gap-2">
                         <button
                           onClick={handleSeeMore}
-                          className="w-full md:w-1/2 px-6 py-2 text-sm font-medium border border-gray-400
-                                   rounded-2xl shadow-sm bg-white text-gray-900
-                                   hover:bg-gray-100 transition cursor-pointer"
+                          className="w-full md:w-1/2 px-6 py-2 text-sm font-medium border border-gray-400 rounded-2xl shadow-sm bg-white text-gray-900 hover:bg-gray-100 transition cursor-pointer"
                         >
                           See More
                         </button>
+                        {selectedForCompare.length >= 2 && (
+                          <button
+                            onClick={handleCompare}
+                            className="w-full md:w-1/2 px-6 py-2 text-sm font-medium border border-gray-400 rounded-2xl shadow-sm bg-white text-gray-900 hover:bg-gray-100 transition cursor-pointer"
+                          >
+                            Compare Selected
+                          </button>
+                        )}
                         {batchIndex > 0 && (
                           <button
                             onClick={handleBack}
-                            className="w-full md:w-1/2 px-6 py-2 text-sm font-medium border border-gray-400
-                                     rounded-2xl shadow-sm bg-white text-gray-900
-                                     hover:bg-gray-100 transition cursor-pointer"
+                            className="w-full md:w-1/2 px-6 py-2 text-sm font-medium border border-gray-400 rounded-2xl shadow-sm bg-white text-gray-900 hover:bg-gray-100 transition cursor-pointer"
                           >
                             Back to Previous
                           </button>
@@ -267,7 +317,6 @@ export default function TitleModal({
                           </button>
                         </div>
                       </div>
-
                       <div className="bg-gray-50 p-5 rounded-lg shadow-sm">
                         <div className="mt-3 text-sm bg-white/50 p-3 rounded-md border border-gray-200 m-4">
                           <strong>Scores:</strong>{" "}
@@ -279,9 +328,7 @@ export default function TitleModal({
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div>
-                            <h4 className="text-sm font-semibold text-green-700 mb-2">
-                              Pros
-                            </h4>
+                            <h4 className="text-sm font-semibold text-green-700 mb-2">Pros</h4>
                             <ul className="space-y-1 text-sm text-gray-700">
                               {analyze.data.pros.map((p, i) => (
                                 <li key={i} className="flex items-start gap-2">
@@ -292,15 +339,11 @@ export default function TitleModal({
                             </ul>
                           </div>
                           <div>
-                            <h4 className="text-sm font-semibold text-orange-700 mb-2">
-                              Cons
-                            </h4>
+                            <h4 className="text-sm font-semibold text-orange-700 mb-2">Cons</h4>
                             <ul className="space-y-1 text-sm text-gray-700">
                               {analyze.data.cons.map((c, i) => (
                                 <li key={i} className="flex items-start gap-2">
-                                  <span className="text-orange-400 mt-1">
-                                    ●
-                                  </span>
+                                  <span className="text-orange-400 mt-1">●</span>
                                   <span>{c}</span>
                                 </li>
                               ))}
@@ -316,6 +359,21 @@ export default function TitleModal({
           </motion.div>
         </Dialog.Content>
       </Dialog.Portal>
+
+      {/* Comparison Modal */}
+      {compareOpen && (
+        <ComparisonModal
+          open={compareOpen}
+          onClose={closeCompare}
+          analyses={compareData?.analyses || []}
+          recommendation={compareData?.recommendation || ""}
+          loading={compareLoading}
+          onUseTitle={(title) => {
+            handleUseTitle(title);
+            closeCompare();
+          }}
+        />
+      )}
     </Dialog.Root>
   );
 }

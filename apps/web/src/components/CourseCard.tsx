@@ -30,8 +30,7 @@ export default function CourseCard({ course }: Props) {
   return (
     <div
       className="relative rounded-2xl overflow-hidden border-4 border-white
-                 shadow-md transition hover:shadow-lg group"
-    >
+                 shadow-md transition hover:shadow-xl group">
       {/* Cover */}
       {course.coverUrl && (
         <img
