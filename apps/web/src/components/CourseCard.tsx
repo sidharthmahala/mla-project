@@ -1,7 +1,8 @@
 // src/components/CourseCard.tsx
 import { useState } from "react";
 import { BookOpen, Clock, DollarSign } from "lucide-react";
-import TitleModal from "./TitleModal";
+
+import TitleModal from "./TitleModal/TitleModal";
 
 type Course = {
   id: number;
