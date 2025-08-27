@@ -162,9 +162,9 @@ export default function TitleModal({
                       <div className="pt-4 flex flex-col md:flex-row justify-center gap-2">
                         <button
                           onClick={handleSeeMore}
-                          className="w-full md:w-1/2 px-6 py-2 text-sm font-medium border border-gray-400 rounded-2xl shadow-sm bg-white text-gray-900 hover:bg-gray-100 transition cursor-pointer"
+                          className=" w-full flex items-center gap-2 justify-center md:w-1/2 px-6 py-2 text-sm font-medium border border-gray-400 rounded-xl shadow-sm bg-white text-gray-900 hover:bg-gray-100 transition cursor-pointer"
                         >
-                          See More
+                          <Sparkles className="w-3 h-3" /> See More
                         </button>
                         {selectedForCompare.length >= 2 && (
                           <button
